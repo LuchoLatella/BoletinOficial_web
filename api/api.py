@@ -1,36 +1,35 @@
-# /api/api.py
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
+import requests
 
 app = Flask(__name__)
 
-# Endpoint para obtener datos por palabras clave, año, y tipo de norma
-@app.route('/api/obtener_datos', methods=['GET'])
-def obtener_datos():
-    palabra_clave = request.args.get('palabra_clave')
-    anio = request.args.get('anio')
-    tipo_norma = request.args.get('tipo_norma')
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    if not palabra_clave or not anio or not tipo_norma:
-        return jsonify({'error': 'Parámetros insuficientes'}), 400
-
-    # Simulación de búsqueda de datos (puedes conectar esto con una base de datos)
-    resultados = buscar_datos(palabra_clave, anio, tipo_norma)
+@app.route('/scrap', methods=['POST'])
+def scrap():
+    keyword = request.form['keyword']
+    year = request.form['year']
+    norm_type = request.form['normType']
     
-    return jsonify(resultados), 200
-
-# Función simulada para buscar datos (reemplazar con lógica real)
-def buscar_datos(palabra_clave, anio, tipo_norma):
-    # Simular algunos resultados según los parámetros
-    datos_simulados = {
-        "palabra_clave": palabra_clave,
-        "anio": anio,
-        "tipo_norma": tipo_norma,
-        "resultados": [
-            {"documento": "RESOLUCIÓN 123", "fecha": f"{anio}-05-15", "detalles": "Aprobación de presupuesto."},
-            {"documento": "DISPOSICIÓN 456", "fecha": f"{anio}-06-10", "detalles": "Regulación de tarifas."},
+    # Aquí realizas el scraping (esto es solo un ejemplo simplificado)
+    url = f"https://www.boletinoficial.gob.ar/{norm_type.lower()}?q={keyword}&year={year}"
+    
+    # Simulación de datos de respuesta
+    scraped_data = {
+        'keyword': keyword,
+        'year': year,
+        'norm_type': norm_type,
+        'url': url,
+        'results': [
+            {'title': 'Resolución 123', 'description': 'Descripción de la resolución'},
+            {'title': 'Disposición 456', 'description': 'Descripción de la disposición'}
         ]
     }
-    return datos_simulados
+    
+    return jsonify(scraped_data)
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    app.run(debug=True)
+
