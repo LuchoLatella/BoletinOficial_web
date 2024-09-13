@@ -25850,3 +25850,4 @@
 2024-09-11 19:25:32,665:INFO:DocRes encontrada: DISPOSICIÓN N.º 14/UOA/24 en índice 23851
 2024-09-11 19:25:33,779:INFO:Resultados guardados en \\10.78.15.33\\e\\GOAEGYRS\\BoletinOficial\\Excelycsv\20240808.xlsx
 2024-09-11 19:25:34,053:INFO:PDF movido a \\10.78.15.33\\e\\GOAEGYRS\\BoletinOficial\\pdf\\procesados\\Archivo\20240808.pdf
+2024-09-12 22:02:58,341:ERROR:Error en el proceso principal: [WinError 53] No se ha encontrado la ruta de acceso de la red: '\\\\10.78.15.33\\\\e\\\\GOAEGYRS\\\\BoletinOficial\\\\pdf'

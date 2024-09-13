@@ -6,7 +6,6 @@ import shutil
 import logging
 import tkinter as tk
 from tkinter import ttk
-from tkinter import messagebox
 
 # Configuración de rutas
 DIRECTORIO_PDF = r'\\10.78.15.33\\e\\GOAEGYRS\\BoletinOficial\\pdf'
@@ -20,133 +19,73 @@ DIRECTORIO_ARCHIVO = r'\\10.78.15.33\\e\\GOAEGYRS\\BoletinOficial\\pdf\\procesad
 logging.basicConfig(filename='procesamiento.log', level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
 
-# Función para limpiar el nombre de archivo
-def limpiar_nombre_archivo(nombre):
-    return re.sub(r'[\/:*?"<>|]', '-', nombre)
+# Funciones previamente definidas...
 
-# Función para buscar coincidencias
-def buscar_coincidencias(patron, lineas, inicio=0, limite=None):
-    for i in range(inicio, len(lineas) if limite is None else limite):
-        if re.match(patron, lineas[i].strip()):
-            return i, lineas[i].strip()
-    return None, None
-
-# Función para extraer el texto que sigue a "VISTO"
-def extraer_visto(lineas, idx_visto):
-    texto_visto = []
-    for linea in lineas[idx_visto + 1:]:
-        if not linea.strip() or re.match(r'^CONSIDERANDO:$', linea.strip()):
-            break
-        texto_visto.append(linea.strip())
-    return ' '.join(texto_visto) if texto_visto else 'null'
-
-# Función para extraer los artículos de un documento en base a renglones
-def extraer_articulos_por_renglon(lineas, idx_articulo, frase_clave="Boletín Oficial"):
-    articulos = []
-    for i in range(idx_articulo, len(lineas)):
-        linea = lineas[i].strip()
-        if frase_clave in linea:
-            articulos.append(linea)
-            break
-        if re.match(r'^(RESOLUCIÓN|DISPOSICIÓN|DECRETO)\b', linea):
-            break
-        articulos.append(linea)
-    return ' '.join(articulos) if articulos else 'null'
-
-# Función para extraer las variables requeridas a nivel de renglón
-def extraer_variables(pdf_path):
+def procesar_pdfs(filtro_palabra_clave, filtro_anio, filtro_tipo):
     try:
-        print(f"Extrayendo variables del archivo {pdf_path}")
-        logging.info(f"Extrayendo variables del archivo {pdf_path}")
-        documento = fitz.open(pdf_path)
-        lineas_globales = []
+        archivos_pdf = [f for f in os.listdir(DIRECTORIO_PDF) if f.lower().endswith('.pdf')]
+        
+        for archivo_pdf in archivos_pdf:
+            pdf_path = os.path.join(DIRECTORIO_PDF, archivo_pdf)
 
-        # Leer todo el documento en una lista de renglones globales
-        for pagina_num in range(len(documento)):
-            pagina = documento.load_page(pagina_num)
-            lineas = pagina.get_text("text").split('\n')
-            lineas_globales.extend(lineas)
+            if not actualizar_historial_csv(pdf_path):
+                continue
 
-        resultados = []
+            resultados = extraer_variables(pdf_path)
 
-        patron_docres = r'^(RESOLUCIÓN|DISPOSICIÓN|DECRETO)\b'
-        patron_fecha = r'Buenos Aires,'
-        patron_visto = r'^VISTO:'
-        patron_articulo = r'^Artículo 1'
+            # Aplicar filtros
+            resultados_filtrados = [
+                resultado for resultado in resultados
+                if filtro_palabra_clave in resultado['DocRes'] and
+                resultado['Fecha'][:4] == str(filtro_anio) and
+                filtro_tipo in resultado['DocRes']
+            ]
 
-        idx = 0
-        while idx < len(lineas_globales):
-            idx_docres, docres = buscar_coincidencias(patron_docres, lineas_globales, inicio=idx)
-            if docres:
-                logging.info(f"DocRes encontrada: {docres} en índice {idx_docres}")
-                print(f"DocRes encontrada: {docres} en índice {idx_docres}")
-                idx_fecha, fecha = buscar_coincidencias(patron_fecha, lineas_globales, inicio=idx_docres)
-                idx_visto, visto = buscar_coincidencias(patron_visto, lineas_globales, inicio=idx_docres + 1, limite=idx_docres + 11)
-                visto_texto = extraer_visto(lineas_globales, idx_visto) if visto else 'null'
-                idx_articulo, articulo = buscar_coincidencias(patron_articulo, lineas_globales, inicio=idx_docres + 1)
-                articulos = extraer_articulos_por_renglon(lineas_globales, idx_articulo) if articulo else 'null'
+            if resultados_filtrados:
+                guardar_resultados_excel(pdf_path, resultados_filtrados)
 
-                resultados.append({
-                    'DocRes': docres,
-                    'Fecha': fecha if fecha else 'null',
-                    'Visto': visto_texto,
-                    'Artículos': articulos
-                })
+                # Mover el archivo procesado al directorio de archivo
+                destino = os.path.join(DIRECTORIO_ARCHIVO, archivo_pdf)
+                shutil.move(pdf_path, destino)
+                logging.info(f"PDF movido a {destino}")
+                print(f"PDF movido a {destino}")
 
-                idx = idx_docres + 1
-            else:
-                break
-
-        return resultados
     except Exception as e:
-        logging.error(f"Error procesando el PDF: {e}")
-        print(f"Error procesando el PDF {pdf_path}: {e}")
-        return []
+        logging.error(f"Error en el proceso principal: {e}")
+        print(f"Error en el proceso principal: {e}")
 
-# Función para procesar los PDFs basándose en la interfaz gráfica
-def procesar_con_filtros(palabra_clave, anio, tipo_norma):
-    # Filtrar y procesar los archivos PDF según la palabra clave, año y tipo de norma
-    print(f"Procesando con palabra clave: {palabra_clave}, año: {anio}, tipo: {tipo_norma}")
-    procesar_pdfs()
 
-# Interfaz gráfica usando Tkinter
-def mostrar_interfaz():
-    root = tk.Tk()
-    root.title("Búsqueda en Boletín Oficial")
+# Función que será llamada cuando se presione el botón
+def iniciar_procesamiento():
+    palabra_clave = entrada_palabra_clave.get()
+    anio = combo_anio.get()
+    tipo_norma = combo_tipo.get()
+    
+    procesar_pdfs(palabra_clave, anio, tipo_norma)
 
-    # Etiquetas y campos de entrada
-    label_palabra_clave = tk.Label(root, text="Palabra clave:")
-    label_palabra_clave.grid(row=0, column=0, padx=10, pady=10)
-    entry_palabra_clave = tk.Entry(root, width=30)
-    entry_palabra_clave.grid(row=0, column=1, padx=10, pady=10)
+# Interfaz gráfica con Tkinter
+ventana = tk.Tk()
+ventana.title("Filtro de Procesamiento de PDF")
 
-    # Filtro de año
-    label_anio = tk.Label(root, text="Año:")
-    label_anio.grid(row=1, column=0, padx=10, pady=10)
-    combo_anio = ttk.Combobox(root, values=[2024, 2023, 2022, 2021, 2020, 2019], state="readonly", width=28)
-    combo_anio.grid(row=1, column=1, padx=10, pady=10)
+# Etiqueta y campo de entrada para la palabra clave
+tk.Label(ventana, text="Palabra clave:").grid(row=0, column=0, padx=10, pady=10)
+entrada_palabra_clave = tk.Entry(ventana)
+entrada_palabra_clave.grid(row=0, column=1, padx=10, pady=10)
 
-    # Filtro de tipo de norma
-    label_tipo_norma = tk.Label(root, text="Tipo de norma:")
-    label_tipo_norma.grid(row=2, column=0, padx=10, pady=10)
-    combo_tipo_norma = ttk.Combobox(root, values=["RESOLUCIÓN", "DISPOSICIÓN", "DECRETO"], state="readonly", width=28)
-    combo_tipo_norma.grid(row=2, column=1, padx=10, pady=10)
+# Desplegable para el año de la norma (2024 a 2005)
+tk.Label(ventana, text="Año:").grid(row=1, column=0, padx=10, pady=10)
+combo_anio = ttk.Combobox(ventana, values=[str(year) for year in range(2024, 2004, -1)])
+combo_anio.grid(row=1, column=1, padx=10, pady=10)
+combo_anio.current(0)  # Seleccionar el año 2024 por defecto
 
-    # Botón para iniciar el procesamiento
-    def iniciar_procesamiento():
-        palabra_clave = entry_palabra_clave.get()
-        anio = combo_anio.get()
-        tipo_norma = combo_tipo_norma.get()
+# Desplegable para el tipo de norma
+tk.Label(ventana, text="Tipo de norma:").grid(row=2, column=0, padx=10, pady=10)
+combo_tipo = ttk.Combobox(ventana, values=["RESOLUCIÓN", "DISPOSICIÓN", "DECRETO"])
+combo_tipo.grid(row=2, column=1, padx=10, pady=10)
+combo_tipo.current(0)  # Seleccionar "RESOLUCIÓN" por defecto
 
-        if not palabra_clave or not anio or not tipo_norma:
-            messagebox.showwarning("Error", "Por favor, complete todos los campos")
-        else:
-            procesar_con_filtros(palabra_clave, anio, tipo_norma)
+# Botón para iniciar el procesamiento
+boton_procesar = tk.Button(ventana, text="Iniciar procesamiento", command=iniciar_procesamiento)
+boton_procesar.grid(row=3, columnspan=2, padx=10, pady=20)
 
-    btn_procesar = tk.Button(root, text="Procesar", command=iniciar_procesamiento)
-    btn_procesar.grid(row=3, column=1, pady=20)
-
-    root.mainloop()
-
-if __name__ == "__main__":
-    mostrar_interfaz()
+ventana.mainloop()
